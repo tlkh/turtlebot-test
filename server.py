@@ -25,7 +25,7 @@ lock = threading.Lock()
 
 app = Flask(__name__)
 
-encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
 
 def capture_n_infer():
     global outputFrame
