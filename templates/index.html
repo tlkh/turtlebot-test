@@ -15,7 +15,7 @@
     }
 
     .starter-template {
-      padding: 3rem 1.5rem;
+      padding: 1rem 1rem;
       text-align: center;
     }
   </style>
@@ -38,8 +38,7 @@
   </nav>
   <main role="main" class="container">
     <div class="starter-template">
-      <p class="lead">TurtleBot Camera Feed</p>
-      <img src="{{ url_for('video_feed') }}">
+      <img src="{{ url_for('video_feed') }}" width=100%>
     </div>
   </main>
 </body>
