@@ -8,7 +8,7 @@ from flask import render_template
 import jetson.inference
 import jetson.utils
 
-network = "ssd-mobilenet-v2"
+network = "ssd-inception-v2"
 overlay = "box,labels"
 threshold = 0.5
 camera = "/dev/video0"
@@ -24,6 +24,8 @@ outputFrame = None
 lock = threading.Lock()
 
 app = Flask(__name__)
+
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
 def capture_n_infer():
     global outputFrame
@@ -52,9 +54,9 @@ def generate():
         with lock:
             if outputFrame is None:
                 continue
-            _, encodedImage = cv2.imencode(".jpg", outputFrame)
-        yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' +
-              bytearray(encodedImage) + b'\r\n')
+            _, encodedImage = cv2.imencode(".jpg", outputFrame, encode_param)
+        yield(b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" +
+              bytearray(encodedImage) + b"\r\n")
 
 
 @app.route("/video_feed")
@@ -77,5 +79,5 @@ def start_app():
     app.run(host=args["ip"], port=args["port"], debug=False,
             threaded=True, use_reloader=False)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     start_app()
