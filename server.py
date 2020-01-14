@@ -25,7 +25,6 @@ lock = threading.Lock()
 
 app = Flask(__name__)
 
-
 def capture_n_infer():
     global outputFrame
     while True:
@@ -35,6 +34,10 @@ def capture_n_infer():
         cv2_img = cv2.cvtColor(cv2_img.astype(np.uint8), cv2.COLOR_RGBA2BGR)
         outputFrame = cv2_img.copy()
 
+# start a thread that will perform motion detection
+t = threading.Thread(target=capture_n_infer)
+t.daemon = True
+t.start()
 
 @app.route("/")
 def index():
@@ -69,11 +72,6 @@ def start_app():
     ap.add_argument("--port", type=int, required=True, default="5000",
                     help="ephemeral port number of the server (1024 to 65535)")
     args = vars(ap.parse_args())
-
-    # start a thread that will perform motion detection
-    t = threading.Thread(target=capture_n_infer)
-    t.daemon = True
-    t.start()
 
     # start the flask app
     app.run(host=args["ip"], port=args["port"], debug=True,
