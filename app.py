@@ -61,13 +61,12 @@ def video_feed():
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
 
-
-if __name__ == '__main__':
+def start_app():
     # construct the argument parser and parse command line arguments
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ip", type=str, required=True,
+    ap.add_argument("--ip", type=str, required=True, default="0.0.0.0",
                     help="ip address of the device")
-    ap.add_argument("--port", type=int, required=True,
+    ap.add_argument("--port", type=int, required=True, default="5000",
                     help="ephemeral port number of the server (1024 to 65535)")
     args = vars(ap.parse_args())
 
@@ -79,3 +78,6 @@ if __name__ == '__main__':
     # start the flask app
     app.run(host=args["ip"], port=args["port"], debug=True,
             threaded=True, use_reloader=False)
+
+if __name__ == '__main__':
+    start_app()
