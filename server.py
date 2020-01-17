@@ -1,4 +1,5 @@
 import argparse
+import time
 import threading
 import numpy as np
 import cv2
@@ -11,35 +12,67 @@ import jetson.utils
 network = "ssd-inception-v2"
 overlay = "box,labels"
 threshold = 0.5
-camera = "/dev/video0"
-width, height = 1280, 720
 
 # load the object detection network
 net = jetson.inference.detectNet(network, [], threshold)
 
 # create the camera and display
-camera = jetson.utils.gstCamera(width, height, camera)
+camera = jetson.utils.gstCamera(1280, 720, "/dev/video0")
+#camera_lower = jetson.utils.gstCamera(640, 480, "/dev/video1")
 
 outputFrame = None
-lock = threading.Lock()
+auxFrame = None
+capture = None
+width, height = None, None
 
 app = Flask(__name__)
 
-encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
 
-def capture_n_infer():
+
+def print_perf(start, end):
+    latency = round(end - start, 4)
+    fps = round(1/(end-start), 1)
+    print(latency, "/", fps)
+
+
+def capture_aux_cam():
+    global auxFrame
+    camera_lower = cv2.VideoCapture("/dev/video1")
+    time.sleep(0.01)
+    while True:
+        _, cv2_img = camera_lower.read()
+        cv2_img = cv2.pyrDown(cv2_img)
+        auxFrame = cv2.copyMakeBorder(
+            cv2_img[-170:, -310:, :], 5, 5, 5, 5, cv2.BORDER_CONSTANT)
+        time.sleep(0.0322)
+
+
+def infer_main():
     global outputFrame
     while True:
-        img, width, height = camera.CaptureRGBA(zeroCopy=1)
-        _ = net.Detect(img, width, height, overlay)
-        cv2_img = jetson.utils.cudaToNumpy(img, width, height, 4)
-        cv2_img = cv2.cvtColor(cv2_img.astype(np.uint8), cv2.COLOR_RGBA2BGR)
-        outputFrame = cv2_img.copy()
+        start = time.time()
+        capture, _, _ = camera.CaptureRGBA(zeroCopy=1)
+        net.Detect(capture, 1280, 720, overlay)
+        cv2_img = jetson.utils.cudaToNumpy(capture, 1280, 720, 4)
+        outputFrame = cv2.cvtColor( cv2_img.astype(np.uint8), cv2.COLOR_RGBA2BGR)
+        print_perf(start, time.time())
 
-# start a thread that will perform motion detection
-t = threading.Thread(target=capture_n_infer)
+
+# start background threads
+
+t = threading.Thread(target=capture_aux_cam)
 t.daemon = True
 t.start()
+
+time.sleep(0.1)
+
+t = threading.Thread(target=infer_main)
+t.daemon = True
+t.start()
+
+time.sleep(0.1)
+
 
 @app.route("/")
 def index():
@@ -48,15 +81,17 @@ def index():
 
 
 def generate():
-    global outputFrame, lock
+    global outputFrame, auxFrame
     while True:
-        # lock required for multi-user viewing
-        with lock:
-            if outputFrame is None:
-                continue
-            _, encodedImage = cv2.imencode(".jpg", outputFrame, encode_param)
-        yield(b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" +
-              bytearray(encodedImage) + b"\r\n")
+        if auxFrame is not None and outputFrame is not None:
+            _outputFrame = outputFrame.copy()
+            _outputFrame[-180:, -320:, :] = auxFrame
+            _, encodedImage = cv2.imencode(
+                ".jpg", _outputFrame, encode_param)
+            yield(b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" +
+                    bytearray(encodedImage) + b"\r\n")
+        else:
+            time.sleep(0.5)
 
 
 @app.route("/video_feed")
@@ -65,6 +100,7 @@ def video_feed():
     # type (mime type)
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
+
 
 def start_app():
     # construct the argument parser and parse command line arguments
@@ -78,6 +114,7 @@ def start_app():
     # start the flask app
     app.run(host=args["ip"], port=args["port"], debug=False,
             threaded=True, use_reloader=False)
+
 
 if __name__ == "__main__":
     start_app()
